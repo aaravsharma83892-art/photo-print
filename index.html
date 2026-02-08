@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Photo Print System</title>
+    <style>
+        :root { --primary: #2563eb; --success: #16a34a; --danger: #dc2626; }
+        body { margin: 0; padding: 20px; background-color: #f1f5f9; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
+        
+        .controls-panel { background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 900px; }
+        .person-row { display: grid; grid-template-columns: 80px 1.5fr 100px 180px 80px; gap: 10px; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+        
+        /* A4 Page Setup */
+        .a4-page { width: 210mm; min-height: 297mm; background: white; padding: 5mm 10mm; box-sizing: border-box; }
+        .photo-grid { display: flex; flex-wrap: wrap; gap: 2mm; justify-content: flex-start; }
+        
+        /* 2.5cm x 3.5cm Photo Box */
+        .photo-box { width: 2.5cm; height: 3.5cm; border: 0.1mm solid #000; box-sizing: border-box; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+        .photo-box img { width: 100%; height: 100%; object-fit: cover; }
+
+        .btn { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
+        .btn-add { background: var(--primary); }
+        .btn-print { background: var(--success); }
+        .btn-magic { background: #7c3aed; font-size: 11px; }
+        .btn-del { background: var(--danger); font-size: 11px; }
+
+        @media print {
+            .controls-panel { display: none; }
+            body { background: none; padding: 0; }
+            .a4-page { box-shadow: none; width: 210mm; }
+            @page { size: A4; margin: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls-panel">
+        <h2>Photo Manager (Auto-Fairness & Clear Face)</h2>
+        <div id="input-container"></div>
+        <div style="margin-top:20px;">
+            <button class="btn btn-add" onclick="addPerson()">+ Add Person</button>
+            <button class="btn btn-print" onclick="window.print()">Print Sheet</button>
+        </div>
+    </div>
+
+    <div class="a4-page">
+        <div id="photo-grid" class="photo-grid"></div>
+    </div>
+
+    <canvas id="procCanvas" style="display:none;"></canvas>
+
+    <script>
+        let people = [];
+
+        function addPerson() {
+            const id = Date.now();
+            people.push({ id: id, original: null, processed: null, count: 1 });
+            renderUI();
+        }
+
+        function handleUpload(id, input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const p = people.find(x => x.id === id);
+                p.original = e.target.result;
+                p.processed = e.target.result; // Set default
+                updatePreview();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function enhancePhoto(id) {
+            const p = people.find(x => x.id === id);
+            if (!p.original) return alert("Upload photo first");
+
+            const img = new Image();
+            img.src = p.original;
+            img.onload = () => {
+                const canvas = document.getElementById('procCanvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = img.width;
+                canvas.height = img.height;
+
+                // 1. Draw original
+                ctx.drawImage(img, 0, 0);
+
+                // 2. Apply Brightness (Fairness) and Contrast (Clarity)
+                // This targets dark patches and dull skin
+                ctx.filter = "brightness(1.2) contrast(1.1) saturate(1.05) blur(0px)";
+                ctx.drawImage(canvas, 0, 0);
+
+                // 3. Save as the new processed image
+                p.processed = canvas.toDataURL('image/jpeg', 0.9);
+                updatePreview();
+                alert("Face enhanced and brightened!");
+            };
+        }
+
+        function updateQty(id, val) {
+            const p = people.find(x => x.id === id);
+            p.count = Math.min(Math.max(parseInt(val) || 0, 0), 10);
+            updatePreview();
+        }
+
+        function removePerson(id) {
+            people = people.filter(x => x.id !== id);
+            renderUI(); updatePreview();
+        }
+
+        function renderUI() {
+            const container = document.getElementById('input-container');
+            container.innerHTML = '';
+            people.forEach((p, i) => {
+                const row = document.createElement('div');
+                row.className = 'person-row';
+                row.innerHTML = `
+                    <strong>#${i+1}</strong>
+                    <input type="file" accept="image/*" onchange="handleUpload(${p.id}, this)">
+                    <input type="number" value="${p.count}" min="1" max="10" oninput="updateQty(${p.id}, this.value)">
+                    <button class="btn btn-magic" onclick="enhancePhoto(${p.id})">✨ Fix Face & Fairness</button>
+                    <button class="btn btn-del" onclick="removePerson(${p.id})">Delete</button>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function updatePreview() {
+            const grid = document.getElementById('photo-grid');
+            grid.innerHTML = '';
+            people.forEach(p => {
+                if (p.processed) {
+                    for (let i = 0; i < p.count; i++) {
+                        const box = document.createElement('div');
+                        box.className = 'photo-box';
+                        box.innerHTML = `<img src="${p.processed}">`;
+                        grid.appendChild(box);
+                    }
+                }
+            });
+        }
+
+        addPerson();
+    </script>
+</body>
+</html>
