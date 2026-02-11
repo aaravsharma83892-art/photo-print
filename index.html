@@ -3,32 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Passport Photo Print System</title>
+    <title>Passport Pro: 7-Photo (4mm Top)</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    
     <style>
-        :root { --primary: #2563eb; --success: #16a34a; --danger: #dc2626; }
-        body { margin: 0; padding: 20px; background-color: #f1f5f9; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
+        :root { --primary: #2563eb; --success: #16a34a; --dark: #1e293b; --danger: #dc2626; }
         
-        .controls-panel { background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 900px; }
-        .person-row { display: grid; grid-template-columns: 80px 1.5fr 100px 180px 80px; gap: 10px; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+        body { 
+            margin: 0; padding: 20px; background: #f1f5f9; 
+            font-family: 'Segoe UI', sans-serif; 
+            display: flex; flex-direction: column; align-items: center; 
+        }
+
+        /* --- UI CONTROLS --- */
+        .controls-panel { 
+            background: white; padding: 25px; border-radius: 12px; 
+            margin-bottom: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+            width: 100%; max-width: 850px; 
+        }
+        .person-row { 
+            display: grid; grid-template-columns: 40px 60px 1fr 100px 80px; 
+            gap: 15px; align-items: center; padding: 12px; border-bottom: 1px solid #e2e8f0; 
+        }
         
-        /* A4 Page Setup */
-        .a4-page { width: 210mm; min-height: 297mm; background: white; padding: 5mm 10mm; box-sizing: border-box; }
-        .photo-grid { display: flex; flex-wrap: wrap; gap: 2mm; justify-content: flex-start; }
+        /* --- EDITOR MODAL --- */
+        #editorModal { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(15, 23, 42, 0.9); z-index: 1000; justify-content: center; align-items: center; 
+        }
+        .modal-content { background: white; padding: 25px; border-radius: 16px; width: 90%; max-width: 700px; }
+        .crop-container { height: 400px; background: #000; border-radius: 8px; overflow: hidden; margin-bottom: 15px; }
+        .filter-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; align-items: center; }
         
-        /* 2.5cm x 3.5cm Photo Box */
-        .photo-box { width: 2.5cm; height: 3.5cm; border: 0.1mm solid #000; box-sizing: border-box; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+        /* --- A4 PRINT LAYOUT --- */
+        .a4-page { 
+            width: 210mm; height: 297mm; background: white; 
+            /* EXACT 4mm margin from top edge */
+            padding: 4mm 10mm 10mm 10mm; 
+            margin: 0 auto; box-sizing: border-box; 
+            display: flex; justify-content: center; align-items: flex-start;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
+            position: relative;
+        }
+
+        .photo-grid { 
+            display: grid; 
+            /* Exactly 7 photos wide at 2.5cm each */
+            grid-template-columns: repeat(7, 2.5cm); 
+            gap: 2mm; 
+            width: fit-content; 
+            justify-content: center; 
+        }
+
+        .photo-box { 
+            width: 2.5cm; height: 3.5cm; border: 0.1mm solid #000; 
+            overflow: hidden; background: #fff; line-height: 0;
+        }
         .photo-box img { width: 100%; height: 100%; object-fit: cover; }
 
-        .btn { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
-        .btn-add { background: var(--primary); }
-        .btn-print { background: var(--success); }
-        .btn-magic { background: #7c3aed; font-size: 11px; }
-        .btn-del { background: var(--danger); font-size: 11px; }
+        /* --- BUTTONS & INPUTS --- */
+        .btn { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; }
+        .btn-blue { background: var(--primary); }
+        .btn-green { background: var(--success); }
+        .btn-danger { background: var(--danger); }
+        input[type=range] { width: 100%; accent-color: var(--primary); }
+        input[type=number] { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; width: 60px; }
 
         @media print {
-            .controls-panel { display: none; }
-            body { background: none; padding: 0; }
-            .a4-page { box-shadow: none; width: 210mm; }
+            .controls-panel, #editorModal, .btn, h2, p { display: none !important; }
+            body { background: none; padding: 0; margin: 0; }
+            .a4-page { box-shadow: none; margin: 0; border: none; position: absolute; top: 0; left: 0; }
             @page { size: A4; margin: 0; }
         }
     </style>
@@ -36,11 +82,46 @@
 <body>
 
     <div class="controls-panel">
-        <h2>Photo Manager (Auto-Fairness & Clear Face)</h2>
-        <div id="input-container"></div>
-        <div style="margin-top:20px;">
-            <button class="btn btn-add" onclick="addPerson()">+ Add Person</button>
-            <button class="btn btn-print" onclick="window.print()">Print Sheet</button>
+        <h2 style="margin:0">Passport Photo Manager</h2>
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">
+            <b>7 Photos Per Line</b> | 4mm Top Margin | Paste (Ctrl+V) Supported
+        </p>
+        
+        <div id="input-list"></div>
+        
+        <div style="margin-top:25px; display:flex; gap:12px;">
+            <button class="btn btn-blue" onclick="document.getElementById('hiddenFile').click()">📂 Upload Photo</button>
+            <button class="btn btn-green" onclick="window.print()">🖨️ Print A4 Sheet</button>
+            <input type="file" id="hiddenFile" style="display:none" accept="image/*" onchange="handleFile(this.files[0])">
+        </div>
+    </div>
+
+    <div id="editorModal">
+        <div class="modal-content">
+            <h3 id="modalTitle" style="margin-top:0">Step 2: Crop (2.5x3.5cm)</h3>
+            <div id="cropStage">
+                <div class="crop-container"><img id="editImage"></div>
+                <button class="btn btn-blue" style="width:100%; padding:15px;" onclick="goToAdjust()">Next: Adjust Color ➡️</button>
+            </div>
+
+            <div id="adjustStage" style="display:none">
+                <div class="filter-controls">
+                    <div style="text-align:center; background: #f8fafc; padding: 10px; border-radius: 8px;">
+                        <div style="display:inline-block; border: 1px solid #000; line-height:0;">
+                            <img id="adjustPreview" style="height: 3.5cm; width: 2.5cm;">
+                        </div>
+                    </div>
+                    <div>
+                        <label style="font-size:12px; font-weight:bold;">Brightness</label>
+                        <input type="range" id="br" min="0.5" max="1.8" step="0.01" value="1" oninput="applyFilters()">
+                        <label style="font-size:12px; font-weight:bold;">Contrast</label>
+                        <input type="range" id="ct" min="0.5" max="1.8" step="0.01" value="1" oninput="applyFilters()">
+                        <label style="font-size:12px; font-weight:bold;">Saturation</label>
+                        <input type="range" id="st" min="0" max="2" step="0.01" value="1" oninput="applyFilters()">
+                        <button class="btn btn-green" style="width:100%; margin-top:20px;" onclick="finishEditing()">Add to Sheet</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -48,60 +129,70 @@
         <div id="photo-grid" class="photo-grid"></div>
     </div>
 
-    <canvas id="procCanvas" style="display:none;"></canvas>
-
     <script>
         let people = [];
+        let cropper = null;
 
-        function addPerson() {
-            const id = Date.now();
-            people.push({ id: id, original: null, processed: null, count: 1 });
-            renderUI();
-        }
+        // --- PASTE LISTENER ---
+        window.addEventListener('paste', e => {
+            const item = Array.from(e.clipboardData.items).find(x => x.type.indexOf('image') !== -1);
+            if (item) handleFile(item.getAsFile());
+        });
 
-        function handleUpload(id, input) {
-            const file = input.files[0];
+        function handleFile(file) {
             if (!file) return;
             const reader = new FileReader();
-            reader.onload = (e) => {
-                const p = people.find(x => x.id === id);
-                p.original = e.target.result;
-                p.processed = e.target.result; // Set default
-                updatePreview();
+            reader.onload = e => {
+                document.getElementById('editImage').src = e.target.result;
+                openModal();
             };
             reader.readAsDataURL(file);
         }
 
-        function enhancePhoto(id) {
-            const p = people.find(x => x.id === id);
-            if (!p.original) return alert("Upload photo first");
-
-            const img = new Image();
-            img.src = p.original;
-            img.onload = () => {
-                const canvas = document.getElementById('procCanvas');
-                const ctx = canvas.getContext('2d');
-                canvas.width = img.width;
-                canvas.height = img.height;
-
-                // 1. Draw original
-                ctx.drawImage(img, 0, 0);
-
-                // 2. Apply Brightness (Fairness) and Contrast (Clarity)
-                // This targets dark patches and dull skin
-                ctx.filter = "brightness(1.2) contrast(1.1) saturate(1.05) blur(0px)";
-                ctx.drawImage(canvas, 0, 0);
-
-                // 3. Save as the new processed image
-                p.processed = canvas.toDataURL('image/jpeg', 0.9);
-                updatePreview();
-                alert("Face enhanced and brightened!");
-            };
+        // --- EDITING LOGIC ---
+        function openModal() {
+            document.getElementById('editorModal').style.display = 'flex';
+            document.getElementById('cropStage').style.display = 'block';
+            document.getElementById('adjustStage').style.display = 'none';
+            if(cropper) cropper.destroy();
+            cropper = new Cropper(document.getElementById('editImage'), {
+                aspectRatio: 2.5 / 3.5,
+                viewMode: 1
+            });
         }
 
+        function goToAdjust() {
+            const dataUrl = cropper.getCroppedCanvas({ width: 600 }).toDataURL('image/jpeg');
+            document.getElementById('adjustPreview').src = dataUrl;
+            document.getElementById('cropStage').style.display = 'none';
+            document.getElementById('adjustStage').style.display = 'block';
+            applyFilters();
+        }
+
+        function applyFilters() {
+            const b = document.getElementById('br').value;
+            const c = document.getElementById('ct').value;
+            const s = document.getElementById('st').value;
+            document.getElementById('adjustPreview').style.filter = `brightness(${b}) contrast(${c}) saturate(${s})`;
+        }
+
+        function finishEditing() {
+            const canvas = document.createElement('canvas');
+            const img = document.getElementById('adjustPreview');
+            canvas.width = 500; canvas.height = 700;
+            const ctx = canvas.getContext('2d');
+            ctx.filter = document.getElementById('adjustPreview').style.filter;
+            ctx.drawImage(img, 0, 0, 500, 700);
+
+            people.push({ id: Date.now(), img: canvas.toDataURL('image/jpeg', 1.0), count: 7 });
+            document.getElementById('editorModal').style.display = 'none';
+            renderUI();
+            updatePreview();
+        }
+
+        // --- UI RENDER ---
         function updateQty(id, val) {
-            const p = people.find(x => x.id === id);
-            p.count = Math.min(Math.max(parseInt(val) || 0, 0), 10);
+            people.find(x => x.id === id).count = Math.max(1, parseInt(val) || 1);
             updatePreview();
         }
 
@@ -111,19 +202,19 @@
         }
 
         function renderUI() {
-            const container = document.getElementById('input-container');
-            container.innerHTML = '';
+            const list = document.getElementById('input-list');
+            list.innerHTML = '';
             people.forEach((p, i) => {
                 const row = document.createElement('div');
                 row.className = 'person-row';
                 row.innerHTML = `
                     <strong>#${i+1}</strong>
-                    <input type="file" accept="image/*" onchange="handleUpload(${p.id}, this)">
-                    <input type="number" value="${p.count}" min="1" max="10" oninput="updateQty(${p.id}, this.value)">
-                    <button class="btn btn-magic" onclick="enhancePhoto(${p.id})">✨ Fix Face & Fairness</button>
-                    <button class="btn btn-del" onclick="removePerson(${p.id})">Delete</button>
+                    <img src="${p.img}" style="height:50px; border:1px solid #ddd;">
+                    <span>Photo Row</span>
+                    <input type="number" value="${p.count}" min="1" oninput="updateQty(${p.id}, this.value)">
+                    <button class="btn btn-danger" style="padding:5px;" onclick="removePerson(${p.id})">Del</button>
                 `;
-                container.appendChild(row);
+                list.appendChild(row);
             });
         }
 
@@ -131,19 +222,14 @@
             const grid = document.getElementById('photo-grid');
             grid.innerHTML = '';
             people.forEach(p => {
-                if (p.processed) {
-                    for (let i = 0; i < p.count; i++) {
-                        const box = document.createElement('div');
-                        box.className = 'photo-box';
-                        box.innerHTML = `<img src="${p.processed}">`;
-                        grid.appendChild(box);
-                    }
+                for (let i = 0; i < p.count; i++) {
+                    const box = document.createElement('div');
+                    box.className = 'photo-box';
+                    box.innerHTML = `<img src="${p.img}">`;
+                    grid.appendChild(box);
                 }
             });
         }
-
-        addPerson();
     </script>
 </body>
-
 </html>
