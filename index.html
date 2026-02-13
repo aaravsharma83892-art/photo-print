@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Passport Pro: 7-Photo (4mm Top)</title>
+    <title>Passport Pro: Multi-Size Manager</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
@@ -17,18 +17,16 @@
             display: flex; flex-direction: column; align-items: center; 
         }
 
-        /* --- UI CONTROLS --- */
         .controls-panel { 
             background: white; padding: 25px; border-radius: 12px; 
             margin-bottom: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
             width: 100%; max-width: 850px; 
         }
         .person-row { 
-            display: grid; grid-template-columns: 40px 60px 1fr 100px 80px; 
+            display: grid; grid-template-columns: 40px 60px 100px 1fr 100px 80px; 
             gap: 15px; align-items: center; padding: 12px; border-bottom: 1px solid #e2e8f0; 
         }
         
-        /* --- EDITOR MODAL --- */
         #editorModal { 
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
             background: rgba(15, 23, 42, 0.9); z-index: 1000; justify-content: center; align-items: center; 
@@ -37,10 +35,8 @@
         .crop-container { height: 400px; background: #000; border-radius: 8px; overflow: hidden; margin-bottom: 15px; }
         .filter-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; align-items: center; }
         
-        /* --- A4 PRINT LAYOUT --- */
         .a4-page { 
             width: 210mm; height: 297mm; background: white; 
-            /* EXACT 4mm margin from top edge */
             padding: 4mm 10mm 10mm 10mm; 
             margin: 0 auto; box-sizing: border-box; 
             display: flex; justify-content: center; align-items: flex-start;
@@ -48,27 +44,21 @@
             position: relative;
         }
 
-        .photo-grid { 
-            display: grid; 
-            /* Exactly 7 photos wide at 2.5cm each */
-            grid-template-columns: repeat(7, 2.5cm); 
-            gap: 2mm; 
-            width: fit-content; 
-            justify-content: center; 
-        }
+        /* Dynamic Grid Classes */
+        .photo-grid { display: grid; gap: 2mm; width: fit-content; justify-content: center; }
+        .grid-25x35 { grid-template-columns: repeat(7, 2.5cm); }
+        .grid-3x4 { grid-template-columns: repeat(6, 3cm); }
 
-        .photo-box { 
-            width: 2.5cm; height: 3.5cm; border: 0.1mm solid #000; 
-            overflow: hidden; background: #fff; line-height: 0;
-        }
+        .photo-box { border: 0.1mm solid #000; overflow: hidden; background: #fff; line-height: 0; }
+        .size-25x35 { width: 2.5cm; height: 3.5cm; }
+        .size-3x4 { width: 3cm; height: 4cm; }
         .photo-box img { width: 100%; height: 100%; object-fit: cover; }
 
-        /* --- BUTTONS & INPUTS --- */
         .btn { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; }
         .btn-blue { background: var(--primary); }
         .btn-green { background: var(--success); }
         .btn-danger { background: var(--danger); }
-        input[type=range] { width: 100%; accent-color: var(--primary); }
+        select { padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1; }
         input[type=number] { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; width: 60px; }
 
         @media print {
@@ -84,9 +74,17 @@
     <div class="controls-panel">
         <h2 style="margin:0">Passport Photo Manager</h2>
         <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">
-            <b>7 Photos Per Line</b> | 4mm Top Margin | Paste (Ctrl+V) Supported
+            Select size before uploading. Supports Ctrl+V paste.
         </p>
         
+        <div style="margin-bottom: 20px; display: flex; gap: 15px; align-items: center; background: #f8fafc; padding: 15px; border-radius: 8px;">
+            <label><b>Target Size:</b></label>
+            <select id="sizeSelect">
+                <option value="2.5x3.5">2.5 cm x 3.5 cm (7 per row)</option>
+                <option value="3x4">3.0 cm x 4.0 cm (6 per row)</option>
+            </select>
+        </div>
+
         <div id="input-list"></div>
         
         <div style="margin-top:25px; display:flex; gap:12px;">
@@ -98,7 +96,7 @@
 
     <div id="editorModal">
         <div class="modal-content">
-            <h3 id="modalTitle" style="margin-top:0">Step 2: Crop (2.5x3.5cm)</h3>
+            <h3 id="modalTitle" style="margin-top:0">Step 1: Crop Photo</h3>
             <div id="cropStage">
                 <div class="crop-container"><img id="editImage"></div>
                 <button class="btn btn-blue" style="width:100%; padding:15px;" onclick="goToAdjust()">Next: Adjust Color ➡️</button>
@@ -107,8 +105,8 @@
             <div id="adjustStage" style="display:none">
                 <div class="filter-controls">
                     <div style="text-align:center; background: #f8fafc; padding: 10px; border-radius: 8px;">
-                        <div style="display:inline-block; border: 1px solid #000; line-height:0;">
-                            <img id="adjustPreview" style="height: 3.5cm; width: 2.5cm;">
+                        <div id="previewContainer" style="display:inline-block; border: 1px solid #000; line-height:0;">
+                            <img id="adjustPreview">
                         </div>
                     </div>
                     <div>
@@ -133,7 +131,6 @@
         let people = [];
         let cropper = null;
 
-        // --- PASTE LISTENER ---
         window.addEventListener('paste', e => {
             const item = Array.from(e.clipboardData.items).find(x => x.type.indexOf('image') !== -1);
             if (item) handleFile(item.getAsFile());
@@ -149,21 +146,34 @@
             reader.readAsDataURL(file);
         }
 
-        // --- EDITING LOGIC ---
         function openModal() {
+            const size = document.getElementById('sizeSelect').value;
+            const ratio = size === '3x4' ? 3/4 : 2.5/3.5;
+            
             document.getElementById('editorModal').style.display = 'flex';
             document.getElementById('cropStage').style.display = 'block';
             document.getElementById('adjustStage').style.display = 'none';
+            
             if(cropper) cropper.destroy();
             cropper = new Cropper(document.getElementById('editImage'), {
-                aspectRatio: 2.5 / 3.5,
+                aspectRatio: ratio,
                 viewMode: 1
             });
         }
 
         function goToAdjust() {
-            const dataUrl = cropper.getCroppedCanvas({ width: 600 }).toDataURL('image/jpeg');
-            document.getElementById('adjustPreview').src = dataUrl;
+            const size = document.getElementById('sizeSelect').value;
+            const w = size === '3x4' ? 300 : 250;
+            const h = size === '3x4' ? 400 : 350;
+
+            const dataUrl = cropper.getCroppedCanvas({ width: w*2 }).toDataURL('image/jpeg');
+            const previewImg = document.getElementById('adjustPreview');
+            previewImg.src = dataUrl;
+            
+            // Set preview dimensions
+            previewImg.style.width = (w/100) + 'cm';
+            previewImg.style.height = (h/100) + 'cm';
+
             document.getElementById('cropStage').style.display = 'none';
             document.getElementById('adjustStage').style.display = 'block';
             applyFilters();
@@ -177,22 +187,31 @@
         }
 
         function finishEditing() {
+            const size = document.getElementById('sizeSelect').value;
+            const w = size === '3x4' ? 300 : 250;
+            const h = size === '3x4' ? 400 : 350;
+
             const canvas = document.createElement('canvas');
-            const img = document.getElementById('adjustPreview');
-            canvas.width = 500; canvas.height = 700;
+            canvas.width = w; canvas.height = h;
             const ctx = canvas.getContext('2d');
             ctx.filter = document.getElementById('adjustPreview').style.filter;
-            ctx.drawImage(img, 0, 0, 500, 700);
+            ctx.drawImage(document.getElementById('adjustPreview'), 0, 0, w, h);
 
-            people.push({ id: Date.now(), img: canvas.toDataURL('image/jpeg', 1.0), count: 7 });
+            people.push({ 
+                id: Date.now(), 
+                img: canvas.toDataURL('image/jpeg', 1.0), 
+                count: (size === '3x4' ? 6 : 7),
+                sizeType: size 
+            });
+            
             document.getElementById('editorModal').style.display = 'none';
             renderUI();
             updatePreview();
         }
 
-        // --- UI RENDER ---
         function updateQty(id, val) {
-            people.find(x => x.id === id).count = Math.max(1, parseInt(val) || 1);
+            const person = people.find(x => x.id === id);
+            if(person) person.count = Math.max(1, parseInt(val) || 1);
             updatePreview();
         }
 
@@ -210,7 +229,8 @@
                 row.innerHTML = `
                     <strong>#${i+1}</strong>
                     <img src="${p.img}" style="height:50px; border:1px solid #ddd;">
-                    <span>Photo Row</span>
+                    <span style="font-size:12px; color:#2563eb;">${p.sizeType} cm</span>
+                    <span>Photo Count</span>
                     <input type="number" value="${p.count}" min="1" oninput="updateQty(${p.id}, this.value)">
                     <button class="btn btn-danger" style="padding:5px;" onclick="removePerson(${p.id})">Del</button>
                 `;
@@ -221,10 +241,18 @@
         function updatePreview() {
             const grid = document.getElementById('photo-grid');
             grid.innerHTML = '';
+            
+            // Note: Mixing sizes in one grid will follow the CSS of the first item 
+            // but for best results, print one size type at a time.
             people.forEach(p => {
+                const gridClass = p.sizeType === '3x4' ? 'grid-3x4' : 'grid-25x35';
+                const boxClass = p.sizeType === '3x4' ? 'size-3x4' : 'size-25x35';
+                
+                grid.className = `photo-grid ${gridClass}`;
+
                 for (let i = 0; i < p.count; i++) {
                     const box = document.createElement('div');
-                    box.className = 'photo-box';
+                    box.className = `photo-box ${boxClass}`;
                     box.innerHTML = `<img src="${p.img}">`;
                     grid.appendChild(box);
                 }
